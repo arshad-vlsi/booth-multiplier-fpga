@@ -1,16 +1,16 @@
-# ✖️ Booth's Multiplication Algorithm — FPGA Implementation
+# ✖️ Booth's Multiplication Algorithm — RTL to Gate-Level Netlist
 
 ![Verilog](https://img.shields.io/badge/Verilog%20HDL-8957e5?style=flat-square)
-![Vivado](https://img.shields.io/badge/Xilinx%20Vivado-2ea44f?style=flat-square)
-![FPGA](https://img.shields.io/badge/FPGA%20Kintex--7-0075ca?style=flat-square)
+![Cadence Genus](https://img.shields.io/badge/Cadence%20Genus%2021.14-e36209?style=flat-square)
+![90nm](https://img.shields.io/badge/90nm%20Standard%20Cell-0075ca?style=flat-square)
 ![Booth](https://img.shields.io/badge/Booth's%20Algorithm-e36209?style=flat-square)
-![Bitstream](https://img.shields.io/badge/Bitstream%20Generated-238636?style=flat-square)
+![Synthesis](https://img.shields.io/badge/Synthesis%20Complete-238636?style=flat-square)
 
 ---
 
 ### Overview
 
-This project implements **Booth's Multiplication Algorithm** in Verilog HDL for signed 4-bit operands, producing an 8-bit result. The design follows the complete **FPGA design flow** in Xilinx Vivado — from RTL design through synthesis, implementation, and **bitstream generation** targeting the **Kintex-7 (xc7k70tfbv676-1)** FPGA.
+This project implements **Booth's Radix-2 Multiplication Algorithm** in Verilog HDL for signed 4-bit operands, producing an 8-bit result. The design has been taken through the complete **RTL-to-synthesis flow** using Cadence Genus 21.14, targeting a **90 nm standard-cell library (slow corner)** and producing a verified gate-level netlist.
 
 ---
 
@@ -19,7 +19,7 @@ This project implements **Booth's Multiplication Algorithm** in Verilog HDL for 
 Booth's algorithm reduces the number of addition/subtraction operations in signed binary multiplication using a **radix-2 recoding** scheme. It examines 2 bits at a time (current LSB + previous bit) to decide add, subtract, or shift.
 
 ```
-Case {q[0], q[-1]}:
+Case {q[0], q_prev}:
   2'b01  →  Accumulate + M   (add multiplicand)
   2'b10  →  Accumulate − M   (subtract multiplicand)
   2'b00 / 2'b11  →  Arithmetic right shift only
@@ -31,7 +31,7 @@ Case {q[0], q[-1]}:
 
 | Port | Direction | Width | Description |
 |------|-----------|-------|-------------|
-| clk | Input | 1-bit | System clock (15ns period — 66.67 MHz) |
+| clk | Input | 1-bit | System clock |
 | rst | Input | 1-bit | Active-high synchronous reset |
 | m | Input | 4-bit signed | Multiplicand |
 | q | Input | 4-bit signed | Multiplier |
@@ -39,30 +39,42 @@ Case {q[0], q[-1]}:
 
 ---
 
-### FPGA Design Flow
+### Synthesis Flow
 
 ```
-RTL Design  →  Simulation  →  Synthesis  →  Implementation  →  Bitstream ✅
+RTL Design  →  Elaboration  →  syn_gen  →  syn_map  →  syn_opt  →  Gate Netlist ✅
 ```
 
-- **Target FPGA:** Kintex-7 `xc7k70tfbv676-1`
-- **Clock Period:** 15 ns (66.67 MHz)
-- **Constraints:** XDC with input/output delays and false path on reset
+- **Tool:** Cadence Genus Synthesis Solution 21.14-s082_1
+- **Technology:** 90 nm standard-cell library — slow corner
+- **Operating Conditions:** slow (balanced_tree)
+- **Constraints:** SDC with input/output delays
 
 ---
 
 ### File Structure
 
 ```
-booth-multiplier/
-├── booth_multiplication.v      ← RTL source — Booth's algorithm
-├── booth_multiplication_tb.v   ← Testbench with 7 signed test cases
-├── booth_constraints.xdc       ← Vivado timing constraints
-├── booth_netlist.v             ← Post-synthesis netlist
-├── booth_multiplication.dcp    ← Design checkpoint
-├── booth_multiplication.bit    ← Generated bitstream
-├── waveform.png                ← Simulation waveform
-└── README.md
+booth-multiplier-fpga/
+├── booth_multiplication.v        ← RTL source — Booth's algorithm
+├── booth_multiplication_tb.v     ← Testbench
+├── booth_constraints.xdc         ← Timing constraints
+├── synth_booth.tcl               ← Cadence Genus synthesis script
+├── README.md
+│
+└── cadence_genus/
+      ├── README.md               ← Full synthesis documentation
+      ├── reports/
+      │     ├── area.rpt          ← Area report
+      │     ├── power.rpt         ← Power report
+      │     ├── timing.rpt        ← Timing report
+      │     └── cell_count.rpt    ← Cell count report
+      ├── netlist/
+      │     └── genus_gate_netlist.v  ← Synthesized gate-level netlist
+      ├── screenshots/
+      │     └── genus_gui.png     ← Genus GUI schematic
+      └── waveforms/
+            └── simulation_waveform.png ← Gate-level simulation waveform
 ```
 
 ---
@@ -71,136 +83,116 @@ booth-multiplier/
 
 | m (Multiplicand) | q (Multiplier) | Expected y |
 |-----------------|----------------|------------|
-| +3 | +3 | +9 |
-| +5 | +2 | +10 |
-| +7 | +1 | +7 |
-| +3 | −3 | −9 |
-| −3 | +3 | −9 |
-| −3 | −3 | +9 |
+| +3 | +2 | +6 |
+| −3 | −2 | +6 |
+| −4 | −2 | +8 |
 |  0 | +5 |  0 |
+| +7 | +7 | +49 |
+| −8 | +1 | −8 |
 
 ---
 
-### Simulation Waveform
+### Simulation Waveform (Gate-Level)
 
-![Waveform](waveform.png)
+![Waveform](cadence_genus/waveforms/simulation_waveform.png)
 
-> Waveform showing clk, rst, m, q and y signals for all signed test cases — verified in Xilinx Vivado Simulator.
+> Gate-level simulation waveform showing clk, rst, m[3:0], q[3:0], signed(y_comb) and signed(y) — verified using Cadence SimVision after synthesis.
+
+---
+
+### ⏱ Timing Report (Cadence Genus)
+
+| Parameter | Value | Status |
+|-----------|-------|--------|
+| Tool | Cadence Genus 21.14-s082_1 | — |
+| Clock Period | 10.000 ns | — |
+| Input Delay | 1.000 ns | — |
+| Data-path Delay | 2.118 ns† | — |
+| Setup Uncertainty | 0.200 ns | — |
+| Required Time | 9.558 ns | — |
+| Setup Slack (WNS) | +6.440 ns | ✅ MET |
+| Startpoint | m[0] (input port) | — |
+| Endpoint | y_reg[5]/SI | — |
+| Operating Corner | slow (balanced_tree) | — |
+
+> † 2.118 ns is the reported data-path delay from input port `m[0]` to `y_reg[5]/SI`. This is **not confirmed as the critical register-to-register delay**. The endpoint `y_reg[5]/SI` is a scan-chain input pin which may reflect scan-mode timing rather than functional-mode critical path.
+
+---
+
+### 📐 Area Report (Cadence Genus)
+
+| Instance | Cell Count | Cell Area | Total Area |
+|----------|-----------|-----------|------------|
+| booth_multiplication | 72 | 488.957 | 488.957 |
+
+> ⚠️ Area is reported in **library area units** — not verified as µm².
+
+---
+
+### ⚡ Power Report (Cadence Genus)
+
+| Category | Total (W) | % |
+|----------|-----------|---|
+| Register | 2.185e-05 | 55.68% |
+| Logic | 1.644e-05 | 41.89% |
+| Clock | 9.558e-07 | 2.44% |
+| **Total** | **3.925e-05** | **100%** |
+
+- **Total Power: 39.2496 µW**
+- Leakage: 5.66% — Internal: 77.86% — Switching: 16.48%
+
+> ⚠️ Pre-layout power estimate — post-layout power may differ due to parasitic capacitances.
+
+---
+
+### 🔧 Cell Count Report (Cadence Genus)
+
+**By Cell Type:**
+
+| Type | Instances | Area | Area % |
+|------|-----------|------|--------|
+| Sequential | 7 | 156.678 | 32.0% |
+| Inverter | 12 | 27.248 | 5.6% |
+| Logic | 53 | 305.031 | 62.4% |
+| **Total** | **72** | **488.957** | **100%** |
+
+**Key Standard Cells Used:**
+
+| Gate | Instances |
+|------|-----------|
+| NOR2XL | 7 |
+| NAND2XL | 6 |
+| OAI22X1 | 6 |
+| CLKINVX1 | 8 |
+| NAND2BX1 | 5 |
+| DFFRHQX1 | 4 |
+| ADDFX1 | 3 |
+| SDFFRHQX1 | 3 |
+
+---
+
+### 🖥 Gate-Level Schematic (Cadence Genus)
+
+![Schematic](cadence_genus/screenshots/genus_gui.png)
+
+> Post-synthesis gate-level schematic generated in Cadence Genus 21.14 showing mapped standard cells on 90 nm slow-corner library.
 
 ---
 
 ### Learning Outcome
 
 - Implemented signed binary multiplication using Booth's radix-2 algorithm
-- Completed full FPGA design flow through bitstream generation on Kintex-7
-- Applied XDC timing constraints with input/output delays & false path on reset
-- Registered combinational output for proper FPGA timing closure
+- Completed RTL-to-synthesis flow using Cadence Genus 21.14
+- Mapped design to 90 nm standard-cell library targeting slow corner
+- Analyzed area, power, timing and cell count from Genus reports
+- Verified gate-level netlist correctness through post-synthesis simulation
 
 ---
 
-### ⏱ Timing Summary (Post-Route)
+### Author
 
-| Parameter | Value | Status |
-|-----------|-------|--------|
-| Clock | sys_clk | — |
-| Clock Period | 15.000 ns (66.67 MHz) | — |
-| WNS — Worst Negative Slack (Setup) | +4.091 ns | ✅ MET |
-| TNS — Total Negative Slack | 0.000 ns | ✅ MET |
-| WHS — Worst Hold Slack | +0.087 ns | ✅ MET |
-| THS — Total Hold Slack | 0.000 ns | ✅ MET |
-| WPWS — Worst Pulse Width Slack | +7.100 ns | ✅ MET |
-| Failing Endpoints | 0 / 16 | ✅ CLEAN |
-| Timing Constraints | Fully constrained | ✅ |
-| Design State | Routed | ✅ |
-
-> **All user specified timing constraints are MET** — verified on Kintex-7 `xc7k70tfbv676-1` using Vivado v2024.2
-
-### 📐 Resource Utilization (Post-Place)
-
-| Resource | Used | Available | Utilization |
-|----------|------|-----------|-------------|
-| Slice LUTs | 16 | 41,000 | 0.04% |
-| Slice Registers (FF) | 8 | 82,000 | <0.01% |
-| F7 Muxes (MUXF7) | 4 | 20,500 | 0.02% |
-| F8 Muxes (MUXF8) | 2 | 10,250 | 0.02% |
-| Bonded IOBs | 18 | 300 | 6.00% |
-| Block RAM | 0 | 135 | 0.00% |
-| DSPs | 0 | 240 | 0.00% |
-| Global Clock Buffers (BUFG) | 1 | 32 | 3.13% |
-| Total Slices Used | 6 | 10,250 | 0.06% |
-
-### 🔧 Primitives Breakdown
-
-| Primitive | Count | Type |
-|-----------|-------|------|
-| LUT6 | 14 | Look-Up Table |
-| LUT4 | 3 | Look-Up Table |
-| LUT2 | 1 | Look-Up Table |
-| FDCE | 8 | Flip-Flop (Clock Enable + Async Reset) |
-| MUXF7 | 4 | Multiplexer |
-| MUXF8 | 2 | Multiplexer |
-| IBUF | 10 | Input Buffer |
-| OBUF | 8 | Output Buffer |
-| BUFG | 1 | Global Clock Buffer |
-
-### ⚡ Power Analysis (Post-Route)
-
-| Parameter | Value |
-|-----------|-------|
-| Total On-Chip Power | 0.085 W |
-| Dynamic Power | 0.003 W |
-| Static Power | 0.081 W |
-| Junction Temperature | 25.2 °C |
-| Max Ambient Temperature | 84.8 °C |
-| Thermal Resistance (TJA) | 1.9 °C/W |
-| Confidence Level | Low (no simulation activity file) |
-
-| On-Chip Component | Power (W) |
-|-------------------|-----------|
-| Clocks | <0.001 W |
-| Slice Logic (LUTs + MUX + FF) | <0.001 W |
-| Signals | <0.001 W |
-| I/O | 0.002 W |
-| Static | 0.081 W |
-
----
-
-### 🕐 Clock Utilization (Post-Route)
-
-| Parameter | Value |
-|-----------|-------|
-| Clock Name | sys_clk |
-| Clock Period | 15.000 ns (66.67 MHz) |
-| Clock Buffer Used | BUFGCTRL (1/32) |
-| Clock Loads (FF) | 8 |
-| Clock Region | X0Y0 |
-| Clock Source | IBUF → BUFG → 8 FFs |
-| MMCM / PLL Used | None |
-
----
-
-### ✅ DRC Report Summary
-
-| Rule | Severity | Description | Status |
-|------|----------|-------------|--------|
-| CFGBVS-1 | Warning | Missing CFGBVS & CONFIG_VOLTAGE property | Non-critical |
-| NSTD-1 | Warning | I/O Standard not specified (18 ports) | Non-critical |
-| UCIO-1 | Warning | Unconstrained port locations (18 ports) | Non-critical |
-
-> ⚠️ All 3 DRC checks are **warnings only** — no errors or critical violations.  
-> These are standard warnings for RTL simulation-focused designs without physical board pin mapping.  
-> **0 DRC Errors — Design is fully routed and clean.**
-
----
-
-### 🖥 RTL Schematic
-
-![Schematic](schematic.png)
-
-> Post-implementation schematic showing LUT6, MUXF7, MUXF8, FDCE flip-flops,  
-> IBUF input buffers and OBUF output buffers — generated in Xilinx Vivado v2024.2
-
-
+**Arshad Ansari**
 M.Tech ECE (VLSI Design) — NIT Hamirpur
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-arshadansari04-0077B5?style=flat-square&logo=linkedin)](https://www.linkedin.com/in/arshadansari04/)
-    
+[![GitHub](https://img.shields.io/badge/GitHub-arshad--vlsi-181717?style=flat-square&logo=github)](https://github.com/arshad-vlsi)
+  
